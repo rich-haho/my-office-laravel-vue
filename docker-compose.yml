@@ -1,0 +1,123 @@
+version: '3'
+
+services:
+  api:
+    image: thecodingmachine/php:7.3-v2-apache
+    volumes:
+      - ./api:/var/www/html
+    environment:
+      PHP_EXTENSION_XDEBUG: 1
+      PHP_EXTENSION_GD: 1
+      PHP_EXTENSION_GETTEXT: 1
+      APACHE_DOCUMENT_ROOT: public
+      DB_DATABASE: ${DB_DATABASE}
+      DB_PORT: ${DB_PORT}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      APP_URL: ${PROTOCOL}://api.${DOMAIN}
+      PLATFORM_URL: ${PROTOCOL}://${DOMAIN}
+      MAIL_TO_DEMAND: ${MAIL_TO_DEMAND}
+      MAIL_FM_SERVICES: ${MAIL_FM_SERVICES}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME}
+      APP_ENV: ${ENV}
+      APP_NAME: ${NAME}
+      DB_HOST: database
+      STARTUP_COMMAND_1: composer install
+      #STARTUP_COMMAND_2: php artisan migrate
+      CRON_USER: root
+      CRON_SCHEDULE: '* * * * *'
+      CRON_COMMAND: php artisan schedule:run
+
+    depends_on:
+      - database
+      - database_testing
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.app.rule=Host(`api.${DOMAIN}`)
+      - traefik.http.routers.app.entrypoints=web
+
+  worker:
+    image: thecodingmachine/php:7.3-v2-apache
+    volumes:
+      - ./api:/var/www/html
+    command: 'php artisan queue:work'
+    # Docker will restart the container if the worker crashes for any reason
+    # See https://docs.docker.com/config/containers/start-containers-automatically/#restart-policy-details
+    restart: unless-stopped
+    networks:
+      - default
+    depends_on:
+      - database
+    labels:
+      - 'traefik.enable=false'
+
+  platform:
+    image: node:12.12
+    volumes:
+      - ./platform:/usr/app/
+    ports:
+      - 8080
+    environment:
+      CHOKIDAR_USEPOLLING: 1
+      NODE_ENV: ${ENV}
+      VUE_APP_DOMAIN: ${DOMAIN}
+      VUE_APP_API_URL: ${PROTOCOL}://api.${DOMAIN}
+    command: bash -c "cd /usr/app && yarn && yarn run serve"
+    labels:
+      - traefik.enable=true
+      - traefik.port=8080
+      - traefik.http.routers.platform.rule=Host(`${DOMAIN}`)
+      - traefik.http.routers.platform.entrypoints=web
+
+  database:
+    image: mysql:5.7
+    volumes:
+      - ./dbdata:/var/lib/mysql
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "${DB_PORT}:3306"
+
+  database_testing:
+    image: mysql:5.7
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "3307:3306"
+
+  pma:
+    image: phpmyadmin/phpmyadmin:latest
+    environment:
+      PMA_HOSTS: database,database_testing
+      VIRTUAL_HOST: pma.{$DOMAIN}
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.pma.rule=Host(`pma.${DOMAIN}`)
+      - traefik.http.routers.pma.entrypoints=web
+
+  traefik:
+    image: traefik:2.0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command:
+      - --api.insecure=true
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+    ports:
+      - "80:80"
+      - "443:443"
+
+networks:
+  default:
+    driver: bridge
+
+volumes:
+  dbdata:

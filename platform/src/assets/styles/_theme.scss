@@ -1,0 +1,150 @@
+@import 'variables';
+
+body {
+  box-sizing: border-box;
+}
+*,
+*::after,
+*::before {
+  margin: 0;
+  padding: 0;
+  box-sizing: inherit;
+}
+
+body,
+button {
+  font-family: 'Lato', sans-serif;
+}
+
+#app {
+  display: flex;
+  min-height: 100vh;
+  position: relative;
+
+  &::after {
+    content: '';
+    background: white url('~@/assets/images/background.jpg') right bottom
+      no-repeat;
+    background-size: cover;
+    opacity: 0.5;
+    position: absolute;
+    z-index: -1;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+  }
+}
+
+h2 {
+  font-weight: 300;
+  letter-spacing: 0.33px;
+  margin-bottom: 0.5em;
+}
+
+h4 {
+  font-weight: bold;
+  letter-spacing: 0.33px;
+  margin-bottom: 0.1em;
+  color: $color-light-dark;
+}
+
+.booting {
+  flex: 1;
+  align-self: center;
+  text-align: center;
+
+  .el-loading-mask {
+    margin-top: -10%;
+    background: $transparent;
+  }
+}
+
+.global-padding {
+  @media screen and (min-width: $--xl) {
+    padding: 10px 250px;
+  }
+  @media screen and (max-width: $--xl) {
+    padding: 10px 120px;
+  }
+  @media screen and (max-width: $--lg) {
+    padding: 10px 10px;
+  }
+}
+
+.el-header {
+  .menu-item.user-detail {
+    > span {
+      @media screen and (max-width: $--md) {
+        width: 100%;
+      }
+    }
+  }
+}
+
+.cards-container {
+  &.horizontal {
+    @media screen and (max-width: $--md) {
+      display: flex;
+      overflow-x: scroll;
+      overflow-y: hidden;
+
+      ::-webkit-scrollbar {
+        width: 0;
+        height: 0;
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: transparent;
+      }
+    }
+  }
+}
+
+.list-title {
+  color: $color-dark;
+  font-size: 18px;
+  padding: 15px 0;
+}
+
+.category-padding {
+  padding: 10px 320px;
+  @media screen and (max-width: 992px) {
+    padding: 10px 160px;
+  }
+}
+
+.content-padding {
+  padding: 10px 150px;
+  @media screen and (max-width: 992px) {
+    padding: 10px 60px;
+  }
+}
+::-webkit-scrollbar {
+  width: 5px;
+  height: 6px;
+  border-radius: 2px;
+}
+
+/* Track */
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Handle */
+::-webkit-scrollbar-thumb {
+  background: $primary-color;
+  border-radius: 2px;
+}
+
+/* Handle on hover */
+::-webkit-scrollbar-thumb:hover {
+  background: $primary-color;
+}
+
+@media screen and (max-width: $--md) {
+  .el-row {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+}

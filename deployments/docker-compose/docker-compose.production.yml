@@ -1,0 +1,98 @@
+version: '3'
+
+services:
+  api:
+    image: git.thecodingmachine.com:444/tcm-projects/zen-office/api:master
+    restart: unless-stopped
+    volumes:
+      - storage:/var/www/html/storage/app/public
+    environment:
+      PHP_EXTENSION_XDEBUG: 1
+      APACHE_DOCUMENT_ROOT: public
+      DB_DATABASE: ${DB_DATABASE}
+      DB_PORT: ${DB_PORT}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      APP_URL: ${PROTOCOL}://api.${DOMAIN}
+      PLATFORM_URL: ${PROTOCOL}://www.${DOMAIN}
+      APP_ENV: ${ENV}
+      APP_NAME: ${NAME}
+      DB_HOST: database
+      MAIL_DRIVER: ${MAIL_DRIVER}
+      MAIL_HOST: ${MAIL_HOST}
+      MAIL_PORT: ${MAIL_PORT}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME}
+      MAIL_TO_DEMAND: ${MAIL_TO_DEMAND}
+      MAIL_FM_SERVICES: ${MAIL_FM_SERVICES}
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      APP_KEY: ${APP_KEY}
+      SUPER_USER_MAIL: ${SUPER_USER_MAIL}
+      SEARCH_LOGS_LIMIT: ${SEARCH_LOGS_LIMIT}
+      STR_SK_EUR: ${STR_SK_EUR}
+      STR_SK_CHF: ${STR_SK_CHF}
+      STARTUP_COMMAND_1: composer install
+      STARTUP_COMMAND_2: php artisan migrate
+      STARTUP_COMMAND_3: php artisan storage:link
+    depends_on:
+      - database
+    labels:
+      - traefik.backend=api
+      - traefik.frontend.rule=Host:api.${DOMAIN}
+
+  worker:
+    image: git.thecodingmachine.com:444/tcm-projects/zen-office/api:master
+    command: 'php artisan queue:work'
+    restart: unless-stopped
+    depends_on:
+      - database
+    labels:
+      - traefik.enable=false
+
+  platform:
+    image: git.thecodingmachine.com:444/tcm-projects/zen-office/platform:master
+    restart: unless-stopped
+    environment:
+      CHOKIDAR_USEPOLLING: 1
+      NODE_ENV: ${ENV}
+      VUE_APP_DOMAIN: ${DOMAIN}
+      VUE_APP_API_URL: ${PROTOCOL}://api.${DOMAIN}
+    labels:
+      - traefik.backend=platform
+      - traefik.frontend.rule=Host:www.${DOMAIN},${DOMAIN}
+
+  database:
+    image: mysql:5.7
+    restart: unless-stopped
+    volumes:
+      - mysql_data:/var/lib/mysql
+    labels:
+      - traefik.enable=false
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+
+  traefik:
+    image: traefik:1.7
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik.toml:/traefik.toml:ro
+      - ./acme.json:/acme.json:rw
+    labels:
+      - traefik.port=8080
+      - traefik.backend=traefik
+      - traefik.frontend.rule=Host:traefik.${DOMAIN}
+    command: --docker
+    ports:
+      - "80:80"
+      - "443:443"
+
+volumes:
+  mysql_data:
+    driver: local
+  storage:
+    driver: local

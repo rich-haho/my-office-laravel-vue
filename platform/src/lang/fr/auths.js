@@ -1,0 +1,21 @@
+export default {
+  my_account: 'Mon Compte',
+  logout: 'Déconnexion',
+  email_address: 'Adresse email',
+  change_password: 'Modifier mon mot de passe',
+  to_login: 'Se connecter',
+  forgot_password: 'Mot de passe oublié',
+  create_account: 'Créer un compte',
+  register_domain_fail: "Votre email n'est pas valide. ",
+  register_domain_fail_desc: 'Merci de contacter votre concierge.',
+  name: 'Nom',
+  validate: 'Valider',
+  account_exist: "J'ai déjà un compte",
+  password_confirm: 'Confirmer le mot de passe',
+  password_reset: 'Réinitialiser le mot de passe',
+  password: 'Mot de passe',
+  update_password: 'Mettre à jour le mot de passe',
+  old_password: 'Ancien mot de passe',
+  new_password: 'Nouveau mot de passe',
+  new_password_confirm: 'Confirmer nouveau mot de passe'
+}

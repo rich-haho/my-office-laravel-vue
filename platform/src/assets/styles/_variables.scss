@@ -1,0 +1,38 @@
+// Colors
+$transparent: rgba(0, 0, 0, 0);
+$color-white: #fff;
+$color-dark-white: #fcfcfc;
+$color-border: #979797;
+$color-text: #252422;
+
+$primary-color: #37b5b4;
+$primary-color-light: #ebf8f8;
+$secondary-color: #e4190c;
+
+$color-dark: #252422;
+$color-light-dark: #777;
+$color-grey: #eee;
+$color-text-grey: #676767;
+$color-light-grey: #b6b6b6;
+
+$color-green: #7ac29a;
+$color-orange: #f3bb45;
+$color-red: #eb5e28;
+$color-blue: #68b3c8;
+
+$color-light-blue: #ebfafc;
+
+// Sizes
+$font-size: 17px;
+$header-height: 80px;
+$aside-width: 200px;
+
+$--xs: 576px !default;
+$--sm: 768px !default;
+$--md: 992px !default;
+$--lg: 1200px !default;
+$--xl: 1920px !default;
+
+:export {
+  headerHeight: $header-height;
+}

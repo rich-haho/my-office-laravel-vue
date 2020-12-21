@@ -1,0 +1,287 @@
+stages:
+  - lint_test
+  - build
+  - deploy
+  - cleanup
+
+lint_platform:
+  stage: lint_test
+  image: thecodingmachine/nodejs:12
+  cache:
+    paths:
+      - platform/node_modules
+      - platform/.yarn
+  before_script:
+    - cd platform && yarn
+  script:
+    - yarn lint-check
+  except:
+    - master
+
+lint_api:
+  stage: lint_test
+  image: thecodingmachine/php:7.3-v2-cli
+  cache:
+    paths:
+    - api/vendor
+    - $HOME/.composer
+  before_script:
+  - cd api && sh ci/install.sh
+  script:
+  - composer cs-check
+  - composer phpstan -- --memory-limit=1024M
+  variables:
+    PHP_INI_MEMORY_LIMIT: 1g
+    PHP_EXTENSION_GD: 1
+  except:
+    - master
+
+test_api:
+  stage: lint_test
+  image: thecodingmachine/php:7.3-v2-cli
+  cache:
+    paths:
+    - api/vendor
+    - $HOME/.composer
+  services:
+  - mysql:5.7
+  variables:
+    PHP_EXTENSION_XDEBUG: 1
+    PHP_EXTENSION_GD: 1
+    PHP_EXTENSION_GETTEXT: 1
+    MYSQL_DATABASE: api
+    MYSQL_ROOT_PASSWORD: secret
+    MYSQL_USER: api
+    MYSQL_PASSWORD: secret
+    DB_HOST: mysql
+    DB_DATABASE: api
+    DB_USERNAME: api
+    DB_PASSWORD: secret
+    APP_ENV: testing
+  before_script:
+  - cd api && sh ci/install-test.sh
+  script:
+  - composer tests
+  after_script:
+  - /home/docker/washingmachine/washingmachine run -v --clover=api/clover.xml
+  artifacts:
+    when: always
+    expire_in: 1 month
+    paths:
+    - api/coverage
+    - api/clover.xml
+  except:
+    - master
+
+.build-image:
+  stage: build
+  image: docker:git
+  services:
+  - docker:dind
+  variables:
+    DOCKER_DRIVER: overlay2
+    IMAGE_NAME: foo
+    DIR_PATH: foo
+  script:
+  - cd ${DIR_PATH}
+  - docker login -u gitlab-ci-token -p $CI_BUILD_TOKEN git.thecodingmachine.com:444
+  - docker build -t git.thecodingmachine.com:444/tcm-projects/zen-office/${IMAGE_NAME}:${CI_COMMIT_REF_SLUG} -f Dockerfile .
+  - docker push git.thecodingmachine.com:444/tcm-projects/zen-office/${IMAGE_NAME}:${CI_COMMIT_REF_SLUG}
+
+build_api:
+  extends: .build-image
+  variables:
+    PHP_EXTENSION_GD: 1
+    IMAGE_NAME: api
+    DIR_PATH: api
+  only:
+  - branches
+  except:
+  - master
+  - develop
+
+build_api_to_production:
+  extends: .build-image
+  variables:
+    IMAGE_NAME: api
+    DIR_PATH: api
+  only:
+    - master
+
+build_platform:
+  extends: .build-image
+  variables:
+    IMAGE_NAME: platform
+    DIR_PATH: platform
+    API_URL: "https://api.$CI_COMMIT_REF_SLUG.zen.test.thecodingmachine.com"
+    PLATFORM_URL: "http://$CI_COMMIT_REF_SLUG.zen.test.thecodingmachine.com"
+  before_script:
+  - sed -i "s@#API_URL#@${API_URL}@g" platform/Dockerfile
+  only:
+  - branches
+  except:
+  - master
+  - develop
+
+build_platform_to_production:
+  extends: .build-image
+  variables:
+    IMAGE_NAME: platform
+    DIR_PATH: platform
+    API_URL: "https://api.yourzenoffice.com"
+    PLATFORM_URL: "https://yourzenoffice.com"
+  before_script:
+    - sed -i "s@#API_URL#@${API_URL}@g" platform/Dockerfile
+    - sed -i "s@#PLATFORM_URL#@${PLATFORM_URL}@g" platform/Dockerfile
+  only:
+    - master
+
+deploy_branches:
+  image: lwolf/kubectl_deployer:latest
+  stage: deploy
+  variables:
+    KUBECONFIG: /root/.kube/config
+  before_script:
+  - apk update && apk add curl
+  - mkdir ~/.kube
+  - echo "$KUBE_CONFIG" > ~/.kube/config
+  - kubectl create namespace ${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_REF_SLUG} || true
+  - kubectl -n ${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_REF_SLUG} delete all --all
+  - kubectl -n ${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_REF_SLUG} delete pvc mysql-data || true
+  - kubectl -n ${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_REF_SLUG} delete pvc api-data || true
+  - kubectl -n ${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_REF_SLUG} delete secret tcmregistry || true
+  - cd kubernetes
+  script:
+  - kubectl -n ${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_REF_SLUG} create secret docker-registry tcmregistry --docker-username=ci.gitlab@thecodingmachine.com --docker-password=$CI_PASSWD --docker-server=git.thecodingmachine.com:444 --docker-email=ci.gitlab@thecodingmachine.com
+  - sed -i "s/#ENVIRONMENT#/${CI_COMMIT_REF_SLUG}/g" config.yaml
+  - kubectl -n ${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_REF_SLUG} apply -f .
+  - curl "https://bigbro.thecodingmachine.com/gitlab/call/start-environment?projectId=${CI_PROJECT_ID}&commitSha=${CI_COMMIT_SHA}&ref=${CI_COMMIT_REF_NAME}&name=${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_REF_SLUG}"
+  environment:
+    name: review/$CI_COMMIT_REF_NAME
+    url: https://bigbro.thecodingmachine.com/environment/${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_REF_SLUG}
+    on_stop: cleanup_branches
+  when: manual
+  only:
+  - branches
+  except:
+  - master
+  - staging
+  - develop
+
+deploy_staging:
+  image: lwolf/kubectl_deployer:latest
+  stage: deploy
+  variables:
+    KUBECONFIG: /root/.kube/config
+  before_script:
+    - apk update && apk add curl
+    - mkdir ~/.kube
+    - echo "$KUBE_CONFIG" > ~/.kube/config
+    - kubectl create namespace ${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_REF_SLUG} || true
+    - kubectl -n ${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_REF_SLUG} delete all --all
+    - kubectl -n ${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_REF_SLUG} delete secret tcmregistry || true
+    - cd kubernetes
+  script:
+    - kubectl -n ${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_REF_SLUG} create secret docker-registry tcmregistry --docker-username=ci.gitlab@thecodingmachine.com --docker-password=$CI_PASSWD --docker-server=git.thecodingmachine.com:444 --docker-email=ci.gitlab@thecodingmachine.com
+    - sed -i "s/#ENVIRONMENT#/${CI_COMMIT_REF_SLUG}/g" config.yaml
+    - sed -i "s/#MAIL_USERNAME#/${MAIL_USERNAME}/g" config.yaml
+    - sed -i "s/#MAIL_PASSWORD#/${MAIL_PASSWORD}/g" config.yaml
+    - sed -i "s/#DB_PASSWORD#/${DB_PASSWORD}/g" config.yaml
+    - sed -i "s/#STR_SK_EUR#/${STR_SK_EUR}/g" config.yaml
+    - sed -i "s/#STR_SK_CHF#/${STR_SK_CHF}/g" config.yaml
+    - kubectl -n ${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_REF_SLUG} apply -f .
+    - curl "https://bigbro.thecodingmachine.com/gitlab/call/start-environment?projectId=${CI_PROJECT_ID}&commitSha=${CI_COMMIT_SHA}&ref=${CI_COMMIT_REF_NAME}&name=${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_REF_SLUG}"
+  environment:
+    name: review/$CI_COMMIT_REF_NAME
+    url: https://bigbro.thecodingmachine.com/environment/${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_REF_SLUG}
+    on_stop: cleanup_staging
+  when: manual
+  only:
+    - staging
+
+cleanup_branches:
+  stage: cleanup
+  image: thecodingmachine/gitlab-registry-cleaner:latest
+  variables:
+    KUBECONFIG: /root/.kube/config
+    GIT_STRATEGY: none
+  before_script:
+  - apk update && apk add curl
+  - mkdir ~/.kube
+  - echo "$KUBE_CONFIG" > ~/.kube/config
+  script:
+  - /delete_image.sh git.thecodingmachine.com:444/tcm-projects/zen-office/api:${CI_COMMIT_REF_SLUG}
+  - /delete_image.sh git.thecodingmachine.com:444/tcm-projects/zen-office/platform:${CI_COMMIT_REF_SLUG}
+  - kubectl -n ${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_REF_SLUG} delete all --all
+  - kubectl -n ${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_REF_SLUG} delete pvc mysql-data || true
+  - kubectl -n ${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_REF_SLUG} delete secret tcmregistry || true
+  - kubectl delete namespace ${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_REF_SLUG}
+  - curl "https://bigbro.thecodingmachine.com/gitlab/call/stop-environment?projectId=${CI_PROJECT_ID}&commitSha=${CI_COMMIT_SHA}&name=${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_REF_SLUG}"
+  when: manual
+  environment:
+    name: review/$CI_COMMIT_REF_NAME
+    action: stop
+  only:
+  - branches
+  except:
+  - master
+  - staging
+  - develop
+
+cleanup_staging:
+  stage: cleanup
+  image: thecodingmachine/gitlab-registry-cleaner:latest
+  variables:
+    KUBECONFIG: /root/.kube/config
+    GIT_STRATEGY: none
+  before_script:
+  - apk update && apk add curl
+  - mkdir ~/.kube
+  - echo "$KUBE_CONFIG" > ~/.kube/config
+  script:
+  - /delete_image.sh git.thecodingmachine.com:444/tcm-projects/zen-office/api:${CI_COMMIT_REF_SLUG}
+  - /delete_image.sh git.thecodingmachine.com:444/tcm-projects/zen-office/platform:${CI_COMMIT_REF_SLUG}
+  - kubectl -n ${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_REF_SLUG} delete all --all
+  - kubectl -n ${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_REF_SLUG} delete pvc mysql-data || true
+  - kubectl -n ${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_REF_SLUG} delete pvc api-data || true
+  - kubectl -n ${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_REF_SLUG} delete secret tcmregistry || true
+  - kubectl delete namespace ${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_REF_SLUG}
+  - curl "https://bigbro.thecodingmachine.com/gitlab/call/stop-environment?projectId=${CI_PROJECT_ID}&commitSha=${CI_COMMIT_SHA}&name=${CI_PROJECT_PATH_SLUG}-${CI_COMMIT_REF_SLUG}"
+  when: manual
+  environment:
+    name: review/$CI_COMMIT_REF_NAME
+    action: stop
+  only:
+  - staging
+
+deploy_to_production:
+  stage: deploy
+  image: kroniak/ssh-client:3.6
+  variables:
+    SERVER_HOSTNAME: 109.237.211.117
+    SSH_USER: deployer
+  before_script:
+    # add the server as a known host
+    - mkdir ~/.ssh
+    - echo "$SSH_KNOWN_HOSTS" >> ~/.ssh/known_hosts
+    - chmod 644 ~/.ssh/known_hosts
+    # add ssh key stored in SSH_PRIVATE_KEY variable to the agent store
+    - eval $(ssh-agent -s)
+    - ssh-add <(echo "$SSH_PRIVATE_KEY")
+    - cd deployments/docker-compose
+  script:
+    # log into Docker registry
+    - ssh "$SSH_USER@$SERVER_HOSTNAME" "docker login -u gitlab-ci-token -p $CI_BUILD_TOKEN git.thecodingmachine.com:444"
+    # Pull images from registry
+    - ssh "$SSH_USER@$SERVER_HOSTNAME" "cd /home/deployer/zen-office && docker pull git.thecodingmachine.com:444/tcm-projects/zen-office/api:master"
+    - ssh "$SSH_USER@$SERVER_HOSTNAME" "cd /home/deployer/zen-office && docker pull git.thecodingmachine.com:444/tcm-projects/zen-office/platform:master"
+    # copy required files
+    - scp docker-compose.production.yml "$SSH_USER@$SERVER_HOSTNAME:/home/deployer/zen-office/docker-compose.yml"
+    - scp traefik/traefik.production.toml "$SSH_USER@$SERVER_HOSTNAME:/home/deployer/zen-office/traefik.toml"
+    # Stop container
+    - ssh "$SSH_USER@$SERVER_HOSTNAME" "cd /home/deployer/zen-office && docker-compose down"
+    # start new containers
+    - ssh "$SSH_USER@$SERVER_HOSTNAME" "cd /home/deployer/zen-office && docker-compose up -d"
+  when: manual
+  only:
+    - master

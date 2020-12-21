@@ -1,0 +1,7 @@
+/.idea
+.env
+/docker-compose.override.yml
+.DS_Store
+.vscode
+/dbdata
+*.orig

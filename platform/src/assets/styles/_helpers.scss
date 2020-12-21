@@ -1,0 +1,145 @@
+/**
+Margin and padding helpers
+ */
+$spaceamounts: (
+  0,
+  5,
+  10,
+  15,
+  20,
+  25,
+  30,
+  35,
+  40,
+  45,
+  50,
+  75,
+  100
+); // Adjust this to include the pixel amounts you need.
+$sides: (top, bottom, left, right); // Leave this variable alone
+$breakpoints: (xs, sm, md, lg, xl);
+$breakpointsSize: (
+        xs: $--xs,
+        sm: $--sm,
+        md: $--md,
+        lg: $--lg,
+        xl: $--xl
+);
+
+@mixin resp($breakpoint) {
+  @media (max-width: #{map-get($breakpointsSize, $breakpoint)}) {
+    @content;
+  }
+}
+
+/*
+** The classes are named using the format {property}{sides}-{size} for all breakpoints
+** and {property}{sides}-{breakpoint}-{size} xs, sm, md, lg, and xl.
+**
+** Where property is one of:
+**    m - for classes that set margin
+**    p - for classes that set padding
+**
+** Where sides is one of:
+**    t - for classes that set margin-top or padding-top
+**    b - for classes that set margin-bottom or padding-bottom
+**    l - for classes that set margin-left or padding-left
+**    r - for classes that set margin-right or padding-right
+**    blank - for classes that set a margin or padding on all 4 sides of the element
+**
+** Where size is one of $spaceamounts variable values.
+ */
+
+@each $space in $spaceamounts {
+  @each $side in $sides {
+      .m#{str-slice($side, 0, 1)}-#{$space} {
+        margin-#{$side}: #{$space}px !important;
+      }
+
+      .m-#{$space} {
+        margin: #{$space}px !important;
+      }
+
+      .p#{str-slice($side, 0, 1)}-#{$space} {
+        padding-#{$side}: #{$space}px !important;
+      }
+
+      .p-#{$space} {
+        padding: #{$space}px !important;
+      }
+
+    }
+  }
+
+@each $space in $spaceamounts {
+  @each $side in $sides {
+    @each $breakpoint in $breakpoints {
+
+
+      .m#{str-slice($side, 0, 1)}-#{$breakpoint}-#{$space} {
+        @include resp($breakpoint) {
+          margin-#{$side}: #{$space}px !important;
+        }
+      }
+
+      .m-#{$breakpoint}-#{$space} {
+        @include resp($breakpoint) {
+          margin: #{$space}px !important;
+        }
+      }
+
+      .p#{str-slice($side, 0, 1)}-#{$breakpoint}-#{$space} {
+        @include resp($breakpoint) {
+          padding-#{$side}: #{$space}px !important;
+        }
+      }
+
+      .p-#{$breakpoint}-#{$space} {
+        @include resp($breakpoint) {
+          padding: #{$space}px !important;
+        }
+      }
+    }
+  }
+}
+
+.text-right {
+  text-align: right;
+}
+
+.text-left {
+  text-align: left;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.horizontal-align {
+  display: flex;
+  justify-content: center;
+}
+
+.vertical-align {
+  display: flex;
+  align-items: center;
+}
+
+.vertical-align-column {
+  display: flex;
+  justify-content: center;
+  flex-flow: column;
+}
+
+.all-align {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.all-align-column {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-flow: column;
+}

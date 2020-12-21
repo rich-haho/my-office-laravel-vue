@@ -1,0 +1,18 @@
+version: '3'
+
+services:
+  api:
+    volumes:
+      - ./api:/var/www/html
+
+  platform:
+    volumes:
+      - ./platform:/usr/app/:delegated
+
+  database:
+    volumes:
+      - dbdata:/var/lib/mysql:delegated
+
+  traefik:
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro,delegated

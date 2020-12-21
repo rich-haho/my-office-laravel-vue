@@ -1,0 +1,11 @@
+parameters:
+    level: max
+    paths:
+        - 'app'
+        - 'config'
+    ignoreErrors:
+        # Add errors to ignore here
+        # Only ignore errors that are real false positives :)
+        - '#Cannot access property .* on App\\Models\\.*|null.#'
+includes:
+  - vendor/nunomaduro/larastan/extension.neon
